@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🍬 Candy Crush</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg1: #1a0533;
+    --bg2: #3d0f6b;
+    --board-bg: rgba(255,255,255,0.07);
+    --card-bg: rgba(255,255,255,0.1);
+    --candy-r: #FF3366;
+    --candy-o: #FF8C00;
+    --candy-y: #FFD700;
+    --candy-g: #00E676;
+    --candy-b: #2979FF;
+    --candy-p: #D500F9;
+    --blocker: #607D8B;
+    --locked: #795548;
+    --text: #fff;
+    --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  body {
+    min-height: 100vh;
+    background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 100%);
+    font-family: 'Nunito', sans-serif;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 16px;
+    overflow-x: hidden;
+  }
+
+  /* Sparkle background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.4) 0%, transparent 100%),
+      radial-gradient(1px 1px at 30% 70%, rgba(255,255,255,0.3) 0%, transparent 100%),
+      radial-gradient(1px 1px at 50% 40%, rgba(255,255,255,0.5) 0%, transparent 100%),
+      radial-gradient(1px 1px at 70% 80%, rgba(255,255,255,0.3) 0%, transparent 100%),
+      radial-gradient(1px 1px at 90% 15%, rgba(255,255,255,0.4) 0%, transparent 100%),
+      radial-gradient(1px 1px at 20% 90%, rgba(255,255,255,0.2) 0%, transparent 100%),
+      radial-gradient(1px 1px at 80% 50%, rgba(255,255,255,0.3) 0%, transparent 100%),
+      radial-gradient(1px 1px at 60% 10%, rgba(255,255,255,0.4) 0%, transparent 100%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #app { position: relative; z-index: 1; width: 100%; max-width: 520px; }
+
+  h1 {
+    font-family: 'Fredoka One', cursive;
+    font-size: clamp(1.8rem, 6vw, 2.6rem);
+    text-align: center;
+    letter-spacing: 2px;
+    background: linear-gradient(90deg, #FF3366, #FFD700, #00E676, #2979FF, #D500F9);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+    filter: drop-shadow(0 2px 8px rgba(255,100,200,0.4));
+  }
+
+  /* ── HUD ── */
+  #hud {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .hud-card {
+    background: var(--card-bg);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 14px;
+    padding: 10px 6px;
+    text-align: center;
+  }
+
+  .hud-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.7;
+    margin-bottom: 2px;
+  }
+
+  .hud-value {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.3rem;
+    line-height: 1;
+  }
+
+  #score-val { color: #FFD700; }
+  #moves-val { color: #00E676; }
+  #level-val  { color: #D500F9; }
+
+  #progress-bar-wrap {
+    background: rgba(255,255,255,0.1);
+    border-radius: 99px;
+    height: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+
+  #progress-bar {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #FF3366, #FFD700);
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+
+  /* ── BOARD ── */
+  #board-wrap {
+    background: var(--board-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    padding: 12px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+  }
+
+  #board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+  }
+
+  .cell {
+    aspect-ratio: 1;
+    border-radius: 12px;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(1rem, 4vw, 1.6rem);
+    transition: transform 0.1s ease, box-shadow 0.15s ease;
+    user-select: none;
+    border: 2px solid transparent;
+  }
+
+  .cell:hover { transform: scale(1.08); }
+
+  .cell.selected {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px #fff, 0 0 16px 4px rgba(255,255,255,0.5);
+    animation: pulse-select 0.7s ease-in-out infinite alternate;
+  }
+
+  @keyframes pulse-select {
+    from { box-shadow: 0 0 0 2px #fff, 0 0 10px 2px rgba(255,255,255,0.4); }
+    to   { box-shadow: 0 0 0 2px #fff, 0 0 22px 6px rgba(255,255,255,0.7); }
+  }
+
+  .cell.matched {
+    animation: pop-out 0.35s ease forwards;
+  }
+
+  @keyframes pop-out {
+    0%   { transform: scale(1); opacity: 1; }
+    50%  { transform: scale(1.4); opacity: 0.6; }
+    100% { transform: scale(0); opacity: 0; }
+  }
+
+  .cell.falling {
+    animation: fall-in 0.3s ease forwards;
+  }
+
+  @keyframes fall-in {
+    from { transform: translateY(-40px); opacity: 0; }
+    to   { transform: translateY(0);     opacity: 1; }
+  }
+
+  .cell.invalid {
+    animation: shake 0.35s ease;
+  }
+
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25%      { transform: translateX(-5px); }
+    75%      { transform: translateX(5px); }
+  }
+
+  /* Candy colors */
+  .c0 { background: linear-gradient(135deg, #FF3366cc, #FF336688); }
+  .c1 { background: linear-gradient(135deg, #FF8C00cc, #FF8C0088); }
+  .c2 { background: linear-gradient(135deg, #FFD700cc, #FFD70088); }
+  .c3 { background: linear-gradient(135deg, #00E676cc, #00E67688); }
+  .c4 { background: linear-gradient(135deg, #2979FFcc, #2979FF88); }
+  .c5 { background: linear-gradient(135deg, #D500F9cc, #D500F988); }
+  .blocker { background: linear-gradient(135deg, #607D8Bcc, #607D8B88); cursor: not-allowed; }
+  .locked  { background: linear-gradient(135deg, #795548cc, #79554888); cursor: not-allowed; }
+
+  /* Gloss shine */
+  .cell::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 4px;
+    width: 40%; height: 35%;
+    background: rgba(255,255,255,0.35);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  /* Striped special */
+  .special-stripe::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(255,255,255,0.25) 0px,
+      rgba(255,255,255,0.25) 4px,
+      transparent 4px,
+      transparent 10px
+    );
+    pointer-events: none;
+  }
+
+  /* Wrapped special */
+  .special-wrap::before {
+    content: '✨';
+    position: absolute;
+    font-size: 0.5em;
+    top: 1px; right: 2px;
+    pointer-events: none;
+  }
+
+  /* Color bomb */
+  .special-bomb {
+    background: radial-gradient(circle at 40% 35%, #fff 0%, #FFD700 30%, #FF3366 60%, #D500F9 100%) !important;
+    animation: spin-bomb 2s linear infinite;
+  }
+
+  @keyframes spin-bomb {
+    from { filter: hue-rotate(0deg); }
+    to   { filter: hue-rotate(360deg); }
+  }
+
+  /* ── BUTTONS ── */
+  #controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  button {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1rem;
+    border: none;
+    border-radius: 50px;
+    padding: 10px 22px;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+    letter-spacing: 0.5px;
+  }
+
+  button:hover  { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+  button:active { transform: translateY(0); }
+
+  #btn-restart { background: linear-gradient(135deg, #FF3366, #FF8C00); color: #fff; }
+  #btn-hint    { background: linear-gradient(135deg, #2979FF, #D500F9); color: #fff; }
+
+  /* ── LEVEL SELECT ── */
+  #level-select-screen {
+    text-align: center;
+    padding: 20px 0;
+  }
+
+  #level-select-screen h2 {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.6rem;
+    margin-bottom: 16px;
+    opacity: 0.9;
+  }
+
+  #level-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    max-width: 340px;
+    margin: 0 auto 20px;
+  }
+
+  .level-btn {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.1rem;
+    aspect-ratio: 1;
+    border-radius: 14px;
+    border: none;
+    cursor: pointer;
+    color: #fff;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+
+  .level-btn:nth-child(1)  { background: linear-gradient(135deg,#FF3366,#FF6088); }
+  .level-btn:nth-child(2)  { background: linear-gradient(135deg,#FF8C00,#FFB300); }
+  .level-btn:nth-child(3)  { background: linear-gradient(135deg,#FFD700,#FFEE58); color:#333; }
+  .level-btn:nth-child(4)  { background: linear-gradient(135deg,#00E676,#69F0AE); color:#333; }
+  .level-btn:nth-child(5)  { background: linear-gradient(135deg,#2979FF,#448AFF); }
+  .level-btn:nth-child(6)  { background: linear-gradient(135deg,#D500F9,#EA80FC); }
+  .level-btn:nth-child(7)  { background: linear-gradient(135deg,#FF3366,#D500F9); }
+  .level-btn:nth-child(8)  { background: linear-gradient(135deg,#FF8C00,#FF3366); }
+  .level-btn:nth-child(9)  { background: linear-gradient(135deg,#2979FF,#00E676); }
+  .level-btn:nth-child(10) { background: linear-gradient(135deg,#1a0533,#D500F9); border: 2px solid #D500F9; }
+
+  .level-btn:hover { transform: scale(1.1); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+
+  /* ── OVERLAYS ── */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,0,30,0.85);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    animation: fade-in 0.3s ease;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; } to { opacity: 1; }
+  }
+
+  .overlay-card {
+    background: linear-gradient(135deg, rgba(61,15,107,0.95), rgba(26,5,51,0.95));
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 24px;
+    padding: 36px 40px;
+    text-align: center;
+    max-width: 320px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    animation: bounce-in 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  @keyframes bounce-in {
+    from { transform: scale(0.7); opacity: 0; }
+    to   { transform: scale(1);   opacity: 1; }
+  }
+
+  .overlay-card h2 {
+    font-family: 'Fredoka One', cursive;
+    font-size: 2rem;
+    margin-bottom: 8px;
+  }
+
+  .overlay-card p { opacity: 0.85; margin-bottom: 16px; font-size: 1rem; }
+
+  .stars {
+    font-size: 2.2rem;
+    margin-bottom: 16px;
+    letter-spacing: 6px;
+  }
+
+  .overlay-card button {
+    margin: 5px;
+    padding: 12px 28px;
+    font-size: 1.05rem;
+  }
+
+  #btn-next { background: linear-gradient(135deg, #00E676, #2979FF); color: #fff; }
+  #btn-retry { background: linear-gradient(135deg, #FF3366, #FF8C00); color: #fff; }
+  #btn-menu  { background: rgba(255,255,255,0.15); color: #fff; }
+
+  /* Confetti */
+  .confetti-piece {
+    position: fixed;
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    pointer-events: none;
+    z-index: 200;
+    animation: confetti-fall linear forwards;
+  }
+
+  @keyframes confetti-fall {
+    0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+  }
+
+  /* Hint flash */
+  .hint-flash {
+    animation: hint-anim 0.5s ease-in-out 3;
+  }
+
+  @keyframes hint-anim {
+    0%,100% { filter: brightness(1); }
+    50%      { filter: brightness(2) drop-shadow(0 0 8px #fff); }
+  }
+
+  /* Score pop */
+  .score-pop {
+    position: fixed;
+    font-family: 'Fredoka One', cursive;
+    color: #FFD700;
+    font-size: 1.4rem;
+    pointer-events: none;
+    z-index: 50;
+    animation: score-float 1s ease forwards;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+  }
+
+  @keyframes score-float {
+    0%   { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-60px); opacity: 0; }
+  }
+
+  /* Legend */
+  #legend {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 0.72rem;
+    opacity: 0.7;
+    margin-bottom: 6px;
+  }
+
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-dot  { width: 12px; height: 12px; border-radius: 4px; }
+
+  @media (max-width: 400px) {
+    #board { gap: 3px; }
+    #board-wrap { padding: 8px; }
+    .cell { border-radius: 8px; font-size: 1rem; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>🍬 Candy Crush</h1>
+
+  <!-- Level Select -->
+  <div id="level-select-screen">
+    <h2>Choose your level</h2>
+    <div id="level-grid"></div>
+  </div>
+
+  <!-- Game Screen (hidden initially) -->
+  <div id="game-screen" style="display:none;">
+    <div id="hud">
+      <div class="hud-card">
+        <div class="hud-label">Score</div>
+        <div class="hud-value" id="score-val">0</div>
+      </div>
+      <div class="hud-card">
+        <div class="hud-label">Target</div>
+        <div class="hud-value" id="target-val" style="color:#FF8C00;">500</div>
+      </div>
+      <div class="hud-card">
+        <div class="hud-label">Moves</div>
+        <div class="hud-value" id="moves-val">30</div>
+      </div>
+    </div>
+    <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+    <div id="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#FF3366"></div>Heart</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#FF8C00"></div>Sun</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#FFD700"></div>Star</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#00E676"></div>Leaf</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#2979FF"></div>Drop</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#D500F9"></div>Gem</div>
+    </div>
+    <div id="board-wrap"><div id="board"></div></div>
+    <div id="controls">
+      <button id="btn-restart">↺ Restart</button>
+      <button id="btn-hint">💡 Hint</button>
+      <button id="btn-menu" onclick="showLevelSelect()" style="background:rgba(255,255,255,0.15);color:#fff;">☰ Levels</button>
+    </div>
+  </div>
+</div>
+
+<!-- Overlays -->
+<div id="overlay-win" class="overlay" style="display:none;">
+  <div class="overlay-card">
+    <div style="font-size:3rem;margin-bottom:8px;">🎉</div>
+    <h2 style="color:#FFD700;">Level Complete!</h2>
+    <div class="stars" id="win-stars">⭐⭐⭐</div>
+    <p id="win-msg">Amazing! You crushed it!</p>
+    <div>
+      <button id="btn-next">Next Level ➜</button>
+      <button id="btn-retry" onclick="retryLevel()">↺ Retry</button>
+    </div>
+    <button id="btn-menu2" onclick="hideOverlay();showLevelSelect();" style="margin-top:8px;background:rgba(255,255,255,0.12);color:#fff;width:100%;">☰ Level Select</button>
+  </div>
+</div>
+
+<div id="overlay-lose" class="overlay" style="display:none;">
+  <div class="overlay-card">
+    <div style="font-size:3rem;margin-bottom:8px;">💔</div>
+    <h2 style="color:#FF3366;">Out of moves!</h2>
+    <p id="lose-msg">So close! Give it another shot.</p>
+    <div>
+      <button id="btn-retry2" onclick="retryLevel()">↺ Try Again</button>
+    </div>
+    <button onclick="hideOverlay();showLevelSelect();" style="margin-top:8px;background:rgba(255,255,255,0.12);color:#fff;width:100%;">☰ Level Select</button>
+  </div>
+</div>
+
+<script>
+// ── CANDY CONFIG ──
+const EMOJIS   = ['❤️','🌟','⭐','🍀','💧','💎'];
+const COLORS   = ['c0','c1','c2','c3','c4','c5'];
+const GRID     = 8;
+const SPECIAL  = { STRIPE:'stripe', WRAP:'wrap', BOMB:'bomb' };
+
+// ── LEVEL CONFIG ──
+const LEVELS = [
+  { target:500,   moves:30, locked:0, blockers:0, types:6 },
+  { target:1000,  moves:28, locked:0, blockers:0, types:6 },
+  { target:2000,  moves:26, locked:0, blockers:0, types:6 },
+  { target:3500,  moves:24, locked:2, blockers:0, types:6 },
+  { target:5000,  moves:22, locked:4, blockers:0, types:6 },
+  { target:7500,  moves:20, locked:6, blockers:1, types:6 },
+  { target:10000, moves:18, locked:6, blockers:2, types:6 },
+  { target:14000, moves:16, locked:8, blockers:3, types:6 },
+  { target:18000, moves:14, locked:10,blockers:4, types:5 },
+  { target:25000, moves:12, locked:12,blockers:5, types:5 },
+];
+
+// ── STATE ──
+let board = [], score = 0, movesLeft = 0, currentLevel = 0;
+let selected = null, animating = false;
+let levelCfg = null;
+
+// ── INIT ──
+function buildLevelSelect() {
+  const grid = document.getElementById('level-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 10; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'level-btn';
+    btn.textContent = i + 1;
+    btn.onclick = () => startLevel(i);
+    grid.appendChild(btn);
+  }
+}
+
+function showLevelSelect() {
+  document.getElementById('level-select-screen').style.display = 'block';
+  document.getElementById('game-screen').style.display = 'none';
+  hideOverlay();
+}
+
+function startLevel(lvl) {
+  currentLevel = lvl;
+  levelCfg = LEVELS[lvl];
+  score = 0;
+  movesLeft = levelCfg.moves;
+  selected = null;
+  animating = false;
+
+  document.getElementById('level-select-screen').style.display = 'none';
+  document.getElementById('game-screen').style.display = 'block';
+  hideOverlay();
+
+  updateHUD();
+  initBoard();
+  renderBoard();
+}
+
+function retryLevel() { startLevel(currentLevel); }
+
+// ── BOARD INIT ──
+function randCandy(types) {
+  return { type: Math.floor(Math.random() * types), special: null, blocker: false, locked: false };
+}
+
+function initBoard() {
+  const cfg = levelCfg;
+  // fill board
+  board = [];
+  for (let r = 0; r < GRID; r++) {
+    board[r] = [];
+    for (let c = 0; c < GRID; c++) {
+      board[r][c] = randCandy(cfg.types);
+    }
+  }
+  // remove initial matches
+  let safety = 0;
+  while (findMatches().length > 0 && safety++ < 100) {
+    for (let r = 0; r < GRID; r++)
+      for (let c = 0; c < GRID; c++)
+        if (isPartOfMatch(r, c)) board[r][c] = randCandy(cfg.types);
+  }
+  // place locked tiles
+  let placed = 0;
+  while (placed < cfg.locked) {
+    const r = Math.floor(Math.random() * GRID);
+    const c = Math.floor(Math.random() * GRID);
+    if (!board[r][c].locked && !board[r][c].blocker) { board[r][c].locked = true; placed++; }
+  }
+  // place blockers
+  placed = 0;
+  while (placed < cfg.blockers) {
+    const r = Math.floor(Math.random() * GRID);
+    const c = Math.floor(Math.random() * GRID);
+    if (!board[r][c].locked && !board[r][c].blocker) {
+      board[r][c].blocker = true;
+      board[r][c].blockerHp = 2;
+      board[r][c].type = -1;
+      placed++;
+    }
+  }
+}
+
+function isPartOfMatch(r, c) {
+  const t = board[r][c].type;
+  if (t < 0) return false;
+  // horizontal
+  let len = 1;
+  let cc = c-1; while(cc>=0 && board[r][cc].type===t) { len++; cc--; }
+  cc = c+1; while(cc<GRID && board[r][cc].type===t) { len++; cc++; }
+  if (len >= 3) return true;
+  // vertical
+  len = 1;
+  let rr = r-1; while(rr>=0 && board[rr][c].type===t) { len++; rr--; }
+  rr = r+1; while(rr<GRID && board[rr][c].type===t) { len++; rr++; }
+  return len >= 3;
+}
+
+// ── RENDER ──
+function renderBoard() {
+  const el = document.getElementById('board');
+  el.innerHTML = '';
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.r = r;
+      cell.dataset.c = c;
+      styleCell(cell, board[r][c]);
+      if (selected && selected[0] === r && selected[1] === c) cell.classList.add('selected');
+      cell.addEventListener('click', onCellClick);
+      el.appendChild(cell);
+    }
+  }
+}
+
+function styleCell(el, candy) {
+  el.className = 'cell';
+  if (candy.blocker) {
+    el.classList.add('blocker');
+    el.textContent = candy.blockerHp === 2 ? '🪨' : '💢';
+    return;
+  }
+  if (candy.locked) {
+    el.classList.add('locked');
+    el.textContent = '🔒';
+    return;
+  }
+  if (candy.special === SPECIAL.BOMB) {
+    el.classList.add('special-bomb');
+    el.textContent = '🌈';
+    return;
+  }
+  el.classList.add(COLORS[candy.type]);
+  el.textContent = EMOJIS[candy.type];
+  if (candy.special === SPECIAL.STRIPE) el.classList.add('special-stripe');
+  if (candy.special === SPECIAL.WRAP)   el.classList.add('special-wrap');
+}
+
+function getCellEl(r, c) {
+  return document.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+}
+
+// ── INTERACTION ──
+function onCellClick(e) {
+  if (animating) return;
+  const r = +e.currentTarget.dataset.r;
+  const c = +e.currentTarget.dataset.c;
+  const candy = board[r][c];
+
+  if (candy.blocker || candy.locked) return;
+
+  if (!selected) {
+    selected = [r, c];
+    renderBoard();
+    return;
+  }
+
+  const [sr, sc] = selected;
+  if (sr === r && sc === c) { selected = null; renderBoard(); return; }
+
+  const dr = Math.abs(r - sr), dc = Math.abs(c - sc);
+  if (dr + dc !== 1) { selected = [r, c]; renderBoard(); return; }
+
+  selected = null;
+  trySwap(sr, sc, r, c);
+}
+
+function trySwap(r1, c1, r2, c2) {
+  if (animating) return;
+  // swap
+  [board[r1][c1], board[r2][c2]] = [board[r2][c2], board[r1][c1]];
+  const matches = findMatches();
+
+  if (matches.length === 0) {
+    // revert
+    [board[r1][c1], board[r2][c2]] = [board[r2][c2], board[r1][c1]];
+    renderBoard();
+    const e1 = getCellEl(r1, c1), e2 = getCellEl(r2, c2);
+    e1 && e1.classList.add('invalid');
+    e2 && e2.classList.add('invalid');
+    setTimeout(() => { e1 && e1.classList.remove('invalid'); e2 && e2.classList.remove('invalid'); }, 400);
+    return;
+  }
+
+  movesLeft--;
+  if (currentLevel < 9) { // no cascade bonus on level 10
+    resolveMatches(matches, 1, r1, c1);
+  } else {
+    resolveMatchesNoBonus(matches);
+  }
+}
+
+// ── MATCHING ──
+function findMatches() {
+  const matched = new Set();
+  // horizontal
+  for (let r = 0; r < GRID; r++) {
+    let c = 0;
+    while (c < GRID) {
+      const t = board[r][c].type;
+      if (t < 0 || board[r][c].blocker) { c++; continue; }
+      let end = c + 1;
+      while (end < GRID && board[r][end].type === t && !board[r][end].blocker) end++;
+      if (end - c >= 3) for (let k = c; k < end; k++) matched.add(`${r},${k}`);
+      c = end;
+    }
+  }
+  // vertical
+  for (let c = 0; c < GRID; c++) {
+    let r = 0;
+    while (r < GRID) {
+      const t = board[r][c].type;
+      if (t < 0 || board[r][c].blocker) { r++; continue; }
+      let end = r + 1;
+      while (end < GRID && board[end][c].type === t && !board[end][c].blocker) end++;
+      if (end - r >= 3) for (let k = r; k < end; k++) matched.add(`${k},${c}`);
+      r = end;
+    }
+  }
+  return [...matched].map(s => s.split(',').map(Number));
+}
+
+function resolveMatches(matches, chain, swapR, swapC) {
+  if (matches.length === 0) { afterResolve(); return; }
+  animating = true;
+
+  // figure out special candy creation
+  // find horizontal runs of 4 or 5 for special creation
+  checkAndCreateSpecials(matches, swapR, swapC);
+
+  // remove matched
+  const pts = matches.length * 30 * chain;
+  score += pts;
+  showScorePop(pts, matches[0][0], matches[0][1]);
+  updateHUD();
+
+  // animate matched cells
+  for (const [r, c] of matches) {
+    const el = getCellEl(r, c);
+    if (el) el.classList.add('matched');
+  }
+
+  setTimeout(() => {
+    // handle blockers adjacent to matches — damage them
+    for (const [r, c] of matches) {
+      const neighbors = [[r-1,c],[r+1,c],[r,c-1],[r,c+1]];
+      for (const [nr,nc] of neighbors) {
+        if (nr>=0&&nr<GRID&&nc>=0&&nc<GRID&&board[nr][nc].blocker) {
+          board[nr][nc].blockerHp--;
+          if (board[nr][nc].blockerHp <= 0) board[nr][nc] = randCandy(levelCfg.types);
+        }
+      }
+    }
+    // remove matched candies (replace locked with normal)
+    for (const [r, c] of matches) {
+      if (board[r][c].locked) board[r][c].locked = false;
+      else board[r][c] = null;
+    }
+    // gravity
+    applyGravity();
+    renderBoard();
+    animateFalling();
+
+    setTimeout(() => {
+      const newMatches = findMatches();
+      if (newMatches.length > 0) resolveMatches(newMatches, chain + 1, -1, -1);
+      else afterResolve();
+    }, 350);
+  }, 380);
+}
+
+function resolveMatchesNoBonus(matches) {
+  animating = true;
+  const pts = matches.length * 30;
+  score += pts;
+  showScorePop(pts, matches[0][0], matches[0][1]);
+  updateHUD();
+
+  for (const [r, c] of matches) { const el = getCellEl(r,c); if(el) el.classList.add('matched'); }
+
+  setTimeout(() => {
+    for (const [r, c] of matches) {
+      if (board[r][c].locked) board[r][c].locked = false;
+      else board[r][c] = null;
+    }
+    applyGravity();
+    renderBoard();
+    animateFalling();
+    setTimeout(() => afterResolve(), 350);
+  }, 380);
+}
+
+function checkAndCreateSpecials(matches, swapR, swapC) {
+  // simplified: count run lengths at swap position
+  if (swapR < 0) return;
+  const t = board[swapR] && board[swapR][swapC] ? board[swapR][swapC].type : -1;
+  if (t < 0) return;
+
+  // count horizontal run
+  let hlen = 1;
+  let c2 = swapC-1; while(c2>=0 && board[swapR][c2].type===t) { hlen++; c2--; }
+  c2 = swapC+1; while(c2<GRID && board[swapR][c2].type===t) { hlen++; c2++; }
+
+  let vlen = 1;
+  let r2 = swapR-1; while(r2>=0 && board[r2][swapC].type===t) { vlen++; r2--; }
+  r2 = swapR+1; while(r2<GRID && board[r2][swapC].type===t) { vlen++; r2++; }
+
+  const len = Math.max(hlen, vlen);
+  if (len >= 5) board[swapR][swapC].special = SPECIAL.BOMB;
+  else if (len === 4) board[swapR][swapC].special = SPECIAL.STRIPE;
+  else if (hlen >= 3 && vlen >= 3) board[swapR][swapC].special = SPECIAL.WRAP;
+}
+
+function applyGravity() {
+  for (let c = 0; c < GRID; c++) {
+    let empty = GRID - 1;
+    for (let r = GRID - 1; r >= 0; r--) {
+      if (board[r][c] !== null) {
+        board[empty][c] = board[r][c];
+        if (empty !== r) board[r][c] = null;
+        empty--;
+      }
+    }
+    for (let r = empty; r >= 0; r--) {
+      board[r][c] = randCandy(levelCfg.types);
+    }
+  }
+}
+
+function animateFalling() {
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      const el = getCellEl(r, c);
+      if (el) { el.classList.remove('falling'); void el.offsetWidth; el.classList.add('falling'); }
+    }
+  }
+}
+
+function afterResolve() {
+  animating = false;
+  updateHUD();
+  checkWinLose();
+}
+
+// ── WIN / LOSE ──
+function checkWinLose() {
+  if (score >= levelCfg.target) { showWin(); return; }
+  if (movesLeft <= 0) { showLose(); return; }
+}
+
+function showWin() {
+  const pct = score / levelCfg.target;
+  let stars = '⭐';
+  if (pct >= 2) stars = '⭐⭐⭐';
+  else if (pct >= 1.5) stars = '⭐⭐';
+  document.getElementById('win-stars').textContent = stars;
+  document.getElementById('win-msg').textContent =
+    pct >= 2 ? 'Unbelievable! Three stars! 🎊' :
+    pct >= 1.5 ? 'Brilliant! Two stars! 🌟' : 'Nice work! Level cleared!';
+  document.getElementById('overlay-win').style.display = 'flex';
+  confetti();
+
+  const btnNext = document.getElementById('btn-next');
+  if (currentLevel < 9) {
+    btnNext.style.display = 'inline-block';
+    btnNext.onclick = () => startLevel(currentLevel + 1);
+  } else {
+    btnNext.style.display = 'none';
+  }
+}
+
+function showLose() {
+  document.getElementById('lose-msg').textContent =
+    `You reached ${score.toLocaleString()} / ${levelCfg.target.toLocaleString()} pts.`;
+  document.getElementById('overlay-lose').style.display = 'flex';
+}
+
+function hideOverlay() {
+  document.getElementById('overlay-win').style.display = 'none';
+  document.getElementById('overlay-lose').style.display = 'none';
+}
+
+// ── HUD ──
+function updateHUD() {
+  document.getElementById('score-val').textContent = score.toLocaleString();
+  document.getElementById('target-val').textContent = levelCfg.target.toLocaleString();
+  document.getElementById('moves-val').textContent = movesLeft;
+  const pct = Math.min(100, (score / levelCfg.target) * 100);
+  document.getElementById('progress-bar').style.width = pct + '%';
+  // color moves red when low
+  const mv = document.getElementById('moves-val');
+  mv.style.color = movesLeft <= 5 ? '#FF3366' : '#00E676';
+}
+
+// ── HINT ──
+function showHint() {
+  if (animating) return;
+  // find first valid swap
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      if (board[r][c].blocker || board[r][c].locked) continue;
+      const dirs = [[0,1],[1,0]];
+      for (const [dr, dc] of dirs) {
+        const nr = r+dr, nc = c+dc;
+        if (nr>=GRID||nc>=GRID) continue;
+        if (board[nr][nc].blocker||board[nr][nc].locked) continue;
+        [board[r][c],board[nr][nc]] = [board[nr][nc],board[r][c]];
+        const m = findMatches();
+        [board[r][c],board[nr][nc]] = [board[nr][nc],board[r][c]];
+        if (m.length > 0) {
+          const e1 = getCellEl(r,c), e2 = getCellEl(nr,nc);
+          e1 && e1.classList.add('hint-flash');
+          e2 && e2.classList.add('hint-flash');
+          setTimeout(() => {
+            e1 && e1.classList.remove('hint-flash');
+            e2 && e2.classList.remove('hint-flash');
+          }, 1600);
+          return;
+        }
+      }
+    }
+  }
+}
+
+// ── SCORE POP ──
+function showScorePop(pts, r, c) {
+  const cell = getCellEl(r, c);
+  if (!cell) return;
+  const rect = cell.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.className = 'score-pop';
+  pop.textContent = `+${pts}`;
+  pop.style.left = rect.left + rect.width/2 + 'px';
+  pop.style.top  = rect.top + 'px';
+  document.body.appendChild(pop);
+  setTimeout(() => pop.remove(), 1000);
+}
+
+// ── CONFETTI ──
+function confetti() {
+  const colors = ['#FF3366','#FF8C00','#FFD700','#00E676','#2979FF','#D500F9'];
+  for (let i = 0; i < 60; i++) {
+    const p = document.createElement('div');
+    p.className = 'confetti-piece';
+    p.style.left = Math.random() * 100 + 'vw';
+    p.style.top  = '-10px';
+    p.style.background = colors[Math.floor(Math.random() * colors.length)];
+    p.style.width  = (8 + Math.random()*8) + 'px';
+    p.style.height = (8 + Math.random()*8) + 'px';
+    p.style.animationDuration = (1 + Math.random()*2) + 's';
+    p.style.animationDelay   = (Math.random()*0.8) + 's';
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 3000);
+  }
+}
+
+// ── WIRE UP ──
+document.getElementById('btn-restart').onclick = retryLevel;
+document.getElementById('btn-hint').onclick    = showHint;
+
+buildLevelSelect();
+</script>
+</body>
+</html>
